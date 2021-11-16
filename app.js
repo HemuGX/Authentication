@@ -1,4 +1,6 @@
-//Encrypting Password
+//Enviromental Variables
+
+require("dotenv").config()  //Require it as early as possible and perform config method.
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
@@ -24,8 +26,11 @@ const userSchema = new mongoose.Schema ({ //Must use the complete mongoose schem
   password: String
 })
 
-const secret = "trulyNotASecureKey"
-userSchema.plugin(encrypt,{secret: secret, encryptedFields: ["password"]}) ////Do it before announcing model.
+//Create .env file on root folder.And put it in gitignore.
+
+// const secret = "trulyNotASecureKey"
+
+userSchema.plugin(encrypt,{secret: process.env.SECRET, encryptedFields: ["password"]}) ////Do it before announcing model.
 
 const User = mongoose.model("User",userSchema);
 
