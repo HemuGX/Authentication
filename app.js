@@ -5,7 +5,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+const md5 = require("md5")  //Require MD5
+
 
 
 const app = express();
@@ -26,11 +27,8 @@ const userSchema = new mongoose.Schema ({ //Must use the complete mongoose schem
   password: String
 })
 
-//Create .env file on root folder.And put it in gitignore.
 
-// const secret = "trulyNotASecureKey"
 
-userSchema.plugin(encrypt,{secret: process.env.SECRET, encryptedFields: ["password"]}) ////Do it before announcing model.
 
 const User = mongoose.model("User",userSchema);
 
@@ -49,7 +47,7 @@ app.get("/register",function(req,res) {
 app.post("/register",function(req,res) {
   const newUser = new User ({
     email: req.body.username,
-    password: req.body.password,
+    password: md5(req.body.password),  //Converting Password into Hash
   })
 
   newUser.save(function(err){  //This will save user information to Dataase.
@@ -61,7 +59,7 @@ app.post("/register",function(req,res) {
 
 app.post("/login",function(req,res) {
   userEmail = req.body.username;
-  userPassword = req.body.password;
+  userPassword = md5(req.body.password); //Converting login input password into hash to check if it matches with the hash in our database.
 
   User.findOne({email: userEmail},function(err,foundUser) {
     if(!err) {
