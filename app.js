@@ -1,13 +1,15 @@
-//Encrypting Password with bcrypt Hash and salting.
+//Using passport for Cookies support
 
 require("dotenv").config() //Require it as early as possible and perform config method.
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt"); //Require bcrypt
-const saltRounds = 10; //This specify how many rounds it will salt through.
+const passport = require ("passport");
+const session = require ("express-session");
+const passportLocalMongoose = require ("passport-local-mongoose");
 
+//No need to require passport-local.
 
 
 
@@ -22,6 +24,18 @@ app.use(bodyParser.urlencoded({
 }));
 app.use(express.static("public"));
 
+const oneDay = 1000 * 60 * 60 * 24;
+
+app.use(session({   //Letting express use express-session.
+  secret: "My big secret",
+  resave: false,
+  cookie: { maxAge: oneDay },  //Cookies will last for one day
+  saveUninitialized: false
+}))
+
+app.use(passport.initialize());  //we are initilaizing passport
+app.use(passport.session());     //We are telling passport to use session.
+
 mongoose.connect("mongodb://localhost:27017/user1DB")
 
 const userSchema = new mongoose.Schema({ //Must use the complete mongoose schema form
@@ -29,67 +43,82 @@ const userSchema = new mongoose.Schema({ //Must use the complete mongoose schema
   password: String
 })
 
+userSchema.plugin(passportLocalMongoose);  //We are gonna use this to hash and salt password and save user to our mongoDB database.
 
 
 
 const User = mongoose.model("User", userSchema);
 
-app.get("/home", function(req, res) {
+passport.use(User.createStrategy());
+
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
+app.get("/", function(req, res) {
   res.render("home")
 })
 
 app.get("/login", function(req, res) {
-  res.render("login")
+
+  if(req.isAuthenticated()){
+    res.redirect("/secrets")  //If the user is already logged in,will redirect to secret page.
+  } else {
+    res.render("login")
+  }
+
 })
 
 app.get("/register", function(req, res) {
   res.render("register")
 })
 
+app.get("/secrets",function(req,res) {
+  if(req.isAuthenticated()) {  //We are checking if the user is authenticated.
+    res.render("secrets")
+  } else {
+    res.redirect("/login")    //If they are not ,we will redirect the to login page.
+  }
+})
+
+app.get("/logout",function(req,res) {
+  req.logout();  //Its a passport method to logout user.
+  res.redirect("/")
+})
+
 app.post("/register", function(req, res) {
 
-  bcrypt.hash(req.body.password, saltRounds, function(err, hash) { //This wil auto gen salt.
-    const newUser = new User({
-      email: req.body.username,
-      password: hash //Using the converted Hash password.
-    })
+User.register({username: req.body.username},req.body.password,function(err,user){  //This package comes from passportLocalMongoose.
+   if(err) {
+     console.log(err);
+     res.redirect("/register")  //If there was any error,we will redirect the user to Register Page.
 
-    console.log(hash);
-
-    newUser.save(function(err) { //This will save user information to Dataase.
-      if (!err) {
-        res.render("secrets") //If the registration was successfull ,the secret page will render,There is no oher way to render it cauz there is no get requesrt.
-      }
-    })
-  });
-
+   } else {
+     passport.authenticate("local") (req,res,function() {  //Will authenticate user using passport.
+       res.redirect("/secrets");
+     })
+   }
+})
 
 });
 
 app.post("/login", function(req, res) {
-  userEmail = req.body.username;
-  userPassword = req.body.password
-  User.findOne({
-    email: userEmail
-  }, function(err, foundUser) {
-    if (!err) {
-      if (foundUser) { //This will check if the user was found.
-        bcrypt.compare(userPassword, foundUser.password).then(function(result) { //This compares input password with password in Database.
-          if (result === true) { //If the result is true,the function will continue.
-            res.render("secrets")
-          }
-        });
 
-        bcrypt.compare(userPassword, foundUser.password).then(function(result) {
-          if (result === false) { //If the result was false ,this function will continue.
-            console.log("Wrong Password!");
-          }
 
-        });
+  const user = new User ({
+    username: req.body.username,
+    password: req.body.password
+  })
 
-      }
-    }
-  });
+   req.login(user,function(err) {
+     if(err) {
+       console.log(err);
+     } else {
+       passport.authenticate("local") (req,res,function() {  //Will authenticate user using passport.
+         res.redirect("/secrets");
+       })
+     }
+   })
+
 });
 
 
